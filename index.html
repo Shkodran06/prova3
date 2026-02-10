@@ -1,1 +1,174 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Arbeits Planner 3 Turni</title>
+<style>
+body { font-family: Arial; margin: 20px; }
+.hidden { display: none; }
+button { margin: 3px; }
+input { margin: 3px; }
+pre { background: #f4f4f4; padding: 10px; white-space: pre-wrap; }
+.section { border: 1px solid #ccc; padding: 10px; margin-bottom: 15px; }
+h2,h3 { margin-bottom:5px; }
+</style>
+</head>
+<body>
+
+<h1>Arbeits Planner – 3 Turni</h1>
+
+<!-- SCHERMATA PRINCIPALE -->
+<div id="mainScreen" class="section">
+  <button onclick="goPlanner()">Vai alla programmazione</button>
+  <button onclick="goAdmin()">Admin</button>
+</div>
+
+<!-- ADMIN -->
+<div id="adminScreen" class="section hidden">
+  <h2>Gestione Arbeiter (Admin)</h2>
+  <input id="newName" placeholder="Nome e Cognome">
+  <button onclick="addWorker()">+</button>
+  <ul id="workerList"></ul>
+  <button onclick="goMain()">Torna al menu principale</button>
+</div>
+
+<!-- PLANNER -->
+<div id="plannerScreen" class="section hidden">
+  <h2>Seleziona presenti</h2>
+  <div id="presentList"></div>
+  <button onclick="generateMultiTurn()">Genera programma 3 turni</button>
+  <pre id="output"></pre>
+  <button onclick="goMain()">Torna al menu principale</button>
+</div>
+
+<script>
+/* ===== STATE ===== */
+let workers = JSON.parse(localStorage.getItem("workers")) || [];
+
+/* ===== NAVIGATION ===== */
+function goAdmin() {
+  document.getElementById("mainScreen").classList.add("hidden");
+  document.getElementById("adminScreen").classList.remove("hidden");
+  renderWorkers();
+}
+function goPlanner() {
+  document.getElementById("mainScreen").classList.add("hidden");
+  document.getElementById("plannerScreen").classList.remove("hidden");
+  renderPresent();
+}
+function goMain() {
+  document.getElementById("adminScreen").classList.add("hidden");
+  document.getElementById("plannerScreen").classList.add("hidden");
+  document.getElementById("mainScreen").classList.remove("hidden");
+}
+
+/* ===== ADMIN ===== */
+function save() {
+  localStorage.setItem("workers", JSON.stringify(workers));
+}
+
+function addWorker() {
+  if (!newName.value.trim()) return;
+  workers.push({ id: Date.now(), name: newName.value.trim(), fatigue:0 });
+  newName.value = "";
+  save();
+  renderWorkers();
+  renderPresent();
+}
+
+function removeWorker(id) {
+  workers = workers.filter(w => w.id !== id);
+  save();
+  renderWorkers();
+  renderPresent();
+}
+
+function editWorker(id) {
+  const w = workers.find(x => x.id === id);
+  const nuovo = prompt("Modifica nome:", w.name);
+  if (nuovo) {
+    w.name = nuovo.trim();
+    save();
+    renderWorkers();
+    renderPresent();
+  }
+}
+
+function renderWorkers() {
+  workerList.innerHTML = "";
+  workers.forEach(w => {
+    workerList.innerHTML += `
+      <li>${w.name}
+        <button onclick="editWorker(${w.id})">✏️</button>
+        <button onclick="removeWorker(${w.id})">−</button>
+      </li>`;
+  });
+}
+
+/* ===== PLANNER ===== */
+function renderPresent() {
+  presentList.innerHTML = "";
+  workers.forEach(w => {
+    presentList.innerHTML += `
+      <label>
+        <input type="checkbox" value="${w.id}">
+        ${w.name}
+      </label><br>`;
+  });
+}
+
+/* ===== LOGICA MULTI-TURNO ===== */
+function generateMultiTurn() {
+  const selectedIds = [...document.querySelectorAll("#presentList input:checked")]
+                        .map(c => parseInt(c.value));
+  if(selectedIds.length===0){ alert("Seleziona almeno un lavoratore"); return; }
+  const selectedWorkers = workers.filter(w=>selectedIds.includes(w.id));
+
+  // RESET FATICA
+  selectedWorkers.forEach(w=>w.fatigue=0);
+
+  let outputText="";
+
+  for(let turno=1;turno<=3;turno++){
+    outputText+=`===== TURNO ${turno} =====\n`;
+
+    // COPIA array per lavoratori ordinati per fatica crescente
+    let candidates = [...selectedWorkers].sort((a,b)=>a.fatigue - b.fatigue);
+
+    // ===== MIDI =====
+    let midiSlots=10;
+    for(let i=0;i<midiSlots;i++){
+      if(candidates[i]){
+        outputText+=`Midi ${i+1}\t${candidates[i].name}\n`;
+        // fatica: più bassa la postazione, più pesante
+        candidates[i].fatigue += (i<2?4:(i<5?3:2));
+      } else outputText+=`Midi ${i+1}\t\n`;
+    }
+
+    // ===== TRIAGE =====
+    let notTriageDone = candidates.filter(w=>w.fatigue<=6); // scelgo meno stanchi
+    outputText+="\nSSCC Druck\n\t"+(notTriageDone[0]?notTriageDone[0].name:"")+"\n\n";
+
+    for(let i=0;i<3;i++){
+      outputText+=`Separation ${i+1}\n\t${notTriageDone[i+1]?notTriageDone[i+1].name:""}\n`;
+    }
+
+    outputText+="\nBand aufgeben\n\t"+(notTriageDone[4]?notTriageDone[4].name:"")+"\n";
+    outputText+="Band aufgeben\n\t"+(notTriageDone[5]?notTriageDone[5].name:"")+"\n";
+
+    // ===== STAMMDATEN =====
+    let stamCandidates = candidates.filter(w=>w.fatigue>0);
+    outputText+="\nStammdaten 1\t"+(stamCandidates[0]?stamCandidates[0].name:"")+"\n";
+    outputText+="Stammdaten 2\t"+(stamCandidates[1]?stamCandidates[1].name:"")+"\n";
+
+    outputText+="\n";
+  }
+
+  document.getElementById("output").textContent = outputText;
+  save();
+}
+</script>
+
+</body>
+</html>
 
